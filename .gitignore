@@ -1,0 +1,20 @@
+# Checkpoints and temporary output
+output/checkpoints/
+output/oe_d114_frontier.json
+wu_queue/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+
+# BOINC state
+wg_d114_state.db
+assimilated_d114.log
+
+# Logs (keep solutions but not rolling logs)
+output/search_log_d114.txt
+nohup.out
+
+# Keep solutions file tracked
+!output/solutions_d114.txt
