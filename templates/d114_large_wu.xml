@@ -1,0 +1,17 @@
+<file_info>
+    <number>0</number>
+</file_info>
+<workunit>
+    <file_ref>
+        <file_number>0</file_number>
+        <open_name>wu.txt</open_name>
+        <copy_file/>
+    </file_ref>
+    <command_line> wu.txt result.txt checkpoint_large_d114.txt</command_line>
+    <!-- 200 m-values × 1001 shifts × 5 candidates ≈ ~1M GMP ops, ~5-30s -->
+    <rsc_fpops_est>1e12</rsc_fpops_est>
+    <rsc_fpops_bound>1e14</rsc_fpops_bound>
+    <rsc_memory_bound>1.07e9</rsc_memory_bound>
+    <rsc_disk_bound>5.24e7</rsc_disk_bound>
+    <delay_bound>1209600</delay_bound>
+</workunit>
