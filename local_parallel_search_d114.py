@@ -40,7 +40,7 @@ import tempfile
 import signal
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ── locations ──────────────────────────────────────────────────────────
 _HERE        = Path(__file__).parent
@@ -60,7 +60,7 @@ _PYTHON = sys.executable
 
 
 def _log(msg: str) -> None:
-    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     line = f"[{ts}] {msg}"
     print(line, flush=True)
     with LOG_LOCK:
@@ -235,53 +235,53 @@ def main():
     total_solutions = 0
 
     if args.no_limit:
-        # Open-ended: continuously dispatch bands
+        # Open-ended: continuously dispatch bands, one future at a time
         frontier = _oe_load_frontier()
         _log(f"Resuming from frontier m={frontier}")
 
         with ProcessPoolExecutor(max_workers=n_workers) as pool:
-            futures = {}
+            futures: dict = {}
             band_id = 0
+            cur = frontier
 
-            def _submit_next(m_pos):
+            def _submit_pair(m_pos: int) -> int:
                 nonlocal band_id
                 m_e = m_pos + args.band - 1
                 f1 = pool.submit(_run_band, m_pos, m_e, band_id)
-                futures[f1] = (m_pos, m_e, band_id, "+")
+                futures[f1] = (m_pos, m_e, band_id)
                 band_id += 1
                 f2 = pool.submit(_run_band, -m_e, -m_pos, band_id)
-                futures[f2] = (-m_e, -m_pos, band_id, "-")
+                futures[f2] = (-m_e, -m_pos, band_id)
                 band_id += 1
                 return m_e + 1
 
-            # Seed initial work
-            cur = frontier
-            while len(futures) < n_workers * 2 and len(futures) < 200:
-                cur = _submit_next(cur)
+            # Seed pool up to capacity
+            while len(futures) < n_workers * 2:
+                cur = _submit_pair(cur)
 
             try:
                 while True:
-                    for fut in list(as_completed(list(futures.keys()), timeout=5)):
-                        ms, me, bid, sgn = futures.pop(fut)
+                    # Block until one future finishes, then refill
+                    for fut in as_completed(list(futures)):
+                        ms, me, bid = futures.pop(fut)
                         try:
-                            _, _, sols = fut.result()
-                            if sols:
-                                for sv in sols:
-                                    _log(f"*** SOLUTION: m={sv[0]} x={sv[1]} Y={sv[2]}")
-                                total_solutions += len(sols)
+                            _, _, _ = fut.result()
                         except Exception as e:
                             _log(f"  Band [{ms},{me}] error: {e}")
 
-                        # Merge result file
                         res_p = _CHKPT_DIR / f"result_{bid}.txt"
                         new = _merge_result_file(res_p)
                         total_solutions += new
 
-                        _log(f"  Done band [{ms},{me}]  total_solutions={total_solutions}")
+                        _log(
+                            f"  Done band [{ms},{me}]  "
+                            f"total_solutions={total_solutions}"
+                        )
                         _oe_save_frontier(cur)
 
-                        # Submit another band
-                        cur = _submit_next(cur)
+                        # Keep pool full: submit a new pair for every completed job
+                        cur = _submit_pair(cur)
+                        break   # re-scan futures list after each completion
 
             except KeyboardInterrupt:
                 _log("Interrupted — saving state.")
